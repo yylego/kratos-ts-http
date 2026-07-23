@@ -1,0 +1,14 @@
+# Uses this project's plugin, so the output is the finished HTTP-form client.
+# The destination is set on the command line with -o, not here.
+# 使用本项目的插件，产出即为最终的 HTTP 形态客户端。
+# 落点不在此处指定，由命令行的 -o 决定。
+version: v2
+inputs:
+  - directory: api
+plugins:
+  - local: protoc-gen-kratos-ts-http
+    out: .
+    opt:
+      - ts_nocheck
+      - eslint_disable
+      - long_type_string

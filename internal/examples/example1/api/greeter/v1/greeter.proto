@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package greeter.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "helloworld/api/greeter/v1;v1";
+
+// Greeter says hello.
+// Greeter 提供问候服务。
+service Greeter {
+  // SayHello greets the name inside the request.
+  // SayHello 向请求中指定的名字致以问候。
+  //
+  // The google.api.http option maps this RPC onto POST /v1/greeter/hello, and the generated
+  // TypeScript client posts to just that path. Without it the client has no address to reach.
+  // google.api.http 把这个 RPC 映射到 POST /v1/greeter/hello，生成的 TypeScript 客户端
+  // 请求的就是这个地址。没有它，客户端不知道该往哪儿发请求。
+  rpc SayHello (SayHelloParam) returns (SayHelloResp) {
+    option (google.api.http) = {
+      post: "/v1/greeter/hello"
+      body: "*"
+    };
+  }
+}
+
+// SayHelloParam carries the name to greet.
+// SayHelloParam 携带要问候的名字。
+message SayHelloParam {
+  // The name to greet.
+  // 要问候的名字。
+  string name = 1;
+}
+
+// SayHelloResp holds the greeting text.
+// SayHelloResp 承载问候语文本。
+message SayHelloResp {
+  // The greeting text.
+  // 问候语文本。
+  string message = 1;
+}
