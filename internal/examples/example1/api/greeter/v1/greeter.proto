@@ -16,9 +16,22 @@ service Greeter {
   // TypeScript client posts to just that path. Without it the client has no address to reach.
   // google.api.http 把这个 RPC 映射到 POST /v1/greeter/hello，生成的 TypeScript 客户端
   // 请求的就是这个地址。没有它，客户端不知道该往哪儿发请求。
-  rpc SayHello (SayHelloParam) returns (SayHelloResp) {
+  rpc SayHello(SayHelloParam) returns (SayHelloResp) {
     option (google.api.http) = {
       post: "/v1/greeter/hello"
+      body: "*"
+    };
+  }
+
+  // StreamHello sends the greeting in pieces, one message each time.
+  // StreamHello 把问候语分成几段，一段一段推送。
+  //
+  // Kratos v3 serves a server-streaming RPC through HTTP as Server-Sent Events, and the generated
+  // TypeScript client reads them with for await.
+  // Kratos v3 通过 HTTP 以 SSE 推送服务端流式 RPC，生成的 TypeScript 客户端用 for await 逐条读取。
+  rpc StreamHello(SayHelloParam) returns (stream SayHelloResp) {
+    option (google.api.http) = {
+      post: "/v1/greeter/hello/stream"
       body: "*"
     };
   }

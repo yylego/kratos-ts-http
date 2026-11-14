@@ -1,10 +1,12 @@
 <!-- TEMPLATE (EN) BEGIN: BADGES -->
+
 [![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/yylego/kratos-ts-http/release.yml?branch=main&label=BUILD)](https://github.com/yylego/kratos-ts-http/actions/workflows/release.yml?query=branch%3Amain)
 [![GoDoc](https://pkg.go.dev/badge/github.com/yylego/kratos-ts-http)](https://pkg.go.dev/github.com/yylego/kratos-ts-http)
 [![Coverage Status](https://img.shields.io/coveralls/github/yylego/kratos-ts-http/main.svg)](https://coveralls.io/github/yylego/kratos-ts-http?branch=main)
 [![Supported Go Versions](https://img.shields.io/badge/Go-1.25%2B-lightgrey.svg)](https://go.dev/)
 [![GitHub Release](https://img.shields.io/github/release/yylego/kratos-ts-http.svg)](https://github.com/yylego/kratos-ts-http/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/yylego/kratos-ts-http)](https://goreportcard.com/report/github.com/yylego/kratos-ts-http)
+
 <!-- TEMPLATE (EN) CLOSE: BADGES -->
 
 # kratos-ts-http
@@ -38,12 +40,22 @@ Doing that as a second pass costs a scratch DIR, a rewrite command in the Makefi
 
 ## Two Ways to Use
 
-| | Route | Entrance | Who drives buf |
-|---|---|---|---|
-| **①** | protoc plugin, one step | `protoc-gen-kratos-ts-http` | The Makefile / command line |
-| **②** | Embedded in a Go program | `kratostshttp.BufGenerate(...)` | The Go code itself |
+|       | Route                    | Entrance                        | Who drives buf              |
+| ----- | ------------------------ | ------------------------------- | --------------------------- |
+| **①** | protoc plugin, one step  | `protoc-gen-kratos-ts-http`     | The Makefile / command line |
+| **②** | Embedded in a Go program | `kratostshttp.BufGenerate(...)` | The Go code itself          |
 
 Both end at the same place, so take the one that suits the workflow.
+
+## Rewrite Rules
+
+Each method in a `*.client.ts` file is rewritten according to its kind:
+
+| Kind                     | Generated code                                                                                                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unary                    | `executeGrpcToHttp(...)`, returning `GrpcToHttpPromise<I, O>`                                                                                                                            |
+| Server streaming         | `executeGrpcToHttpStream(method, opt, input)`, returning `GrpcToHttpStream<I, O>`, read with `for await`                                                                                 |
+| Client streaming, duplex | Kept in gRPC form. Kratos serves these through WebSocket, which grpc-to-http does not handle, so a request gets the transport's own message instead of going out as a wrong HTTP request |
 
 ## Installation
 
@@ -64,9 +76,7 @@ go install github.com/bufbuild/buf/cmd/buf@latest
 
 ## Usage 1: protoc Plugin
 
-Two config files. Live copies of both sit in the example, so nothing here is pseudo code:
-[`buf.yaml`](internal/examples/example1/buf.yaml) and
-[`buf.gen.ts.yaml`](internal/examples/example1/buf.gen.ts.yaml).
+Two config files. Live copies of both sit in the example, so nothing here is pseudo code: [`buf.yaml`](internal/examples/example1/buf.yaml) and [`buf.gen.ts.yaml`](internal/examples/example1/buf.gen.ts.yaml).
 
 **`buf.yaml`** says where the protos live and which deps to fetch. Kratos v3 projects ship one, so this might just mean adding the `deps` line:
 
@@ -75,7 +85,7 @@ version: v2
 modules:
   - path: api
 deps:
-  - buf.build/googleapis/googleapis   # google.api.http comes from here
+  - buf.build/googleapis/googleapis # google.api.http comes from here
 ```
 
 Run `buf dep update` once afterwards. It writes a `buf.lock` that pins the exact googleapis commit, which keeps the generated output stable. Skip this step and generation stops with `imported file does not exist`.
@@ -88,7 +98,7 @@ inputs:
   - directory: api
 plugins:
   - local: protoc-gen-kratos-ts-http
-    out: .   # the destination is NOT set here, -o on the command line decides it
+    out: . # the destination is NOT set here, -o on the command line decides it
     opt:
       - ts_nocheck
       - eslint_disable
@@ -110,17 +120,19 @@ Then add the runtime to the frontend:
 npm install @yylego/grpc-to-http
 ```
 
+Server-streaming methods need `@yylego/grpc-to-http` 0.0.2 and up. The Kratos backend must use the protojson codec as its `json` codec, see [Data Format](https://github.com/yylego/grpc-to-http#data-format).
+
 **`opt` options:**
 
-| Option | Effect |
-| --- | --- |
-| `ts_nocheck` | Adds `// @ts-nocheck`, so generated files skip type checking |
-| `eslint_disable` | Adds `/* eslint-disable */`, so lint tools leave them alone |
+| Option             | Effect                                                                    |
+| ------------------ | ------------------------------------------------------------------------- |
+| `ts_nocheck`       | Adds `// @ts-nocheck`, so generated files skip type checking              |
+| `eslint_disable`   | Adds `/* eslint-disable */`, so lint tools leave them alone               |
 | `long_type_string` | Maps 64-bit integers to `string` instead of `bigint`, which survives JSON |
 
 `--include-imports` makes buf emit the imported google standard types too, so the client imports resolve. buf pulls those from buf.build once `buf.build/googleapis/googleapis` is declared in `deps` inside `buf.yaml`, so no `third_party` proto tree is needed on disk.
 
-> Should the frontend live in a separate repo, aim `-o` at a staging DIR named with a `.out` suffix: Go's stock `.gitignore` ignores `*.out`, so the staged code stays out of the backend repo.
+> Should the frontend live in a separate repo, aim `-o` at a staging DIR named with a `.out` suffix: Go's standard `.gitignore` ignores `*.out`, so the staged code stays out of the backend repo.
 
 ## Usage 2: Drive from Go
 
@@ -153,14 +165,14 @@ This turns "backend edits a proto → frontend has a fresh client" into one func
 
 [`internal/examples/example1`](internal/examples/example1) puts the whole chain in one DIR, in the sequence the questions come up:
 
-| File | What it answers |
-|---|---|
-| [`api/greeter/v1/greeter.proto`](internal/examples/example1/api/greeter/v1/greeter.proto) | Suppose the API looks like this. The `google.api.http` line maps SayHello onto `POST /v1/greeter/hello` |
-| [`buf.yaml`](internal/examples/example1/buf.yaml) + [`buf.lock`](internal/examples/example1/buf.lock) | Which protos to read and which deps to fetch. The lock pins the exact googleapis commit |
-| [`buf.gen.ts.yaml`](internal/examples/example1/buf.gen.ts.yaml) | Which plugin to run. `out: .` keeps the destination out of the template |
-| [`Makefile`](internal/examples/example1/Makefile) | `install`, then `generate`, then `check` |
-| [`web/src/rpc/`](internal/examples/example1/web/src/rpc) | Where the client lands: inside the frontend, with no staging DIR between |
-| [`golden.ts`](internal/examples/example1/golden.ts) | **The client you end up with** |
+| File                                                                                                  | What it answers                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`api/greeter/v1/greeter.proto`](internal/examples/example1/api/greeter/v1/greeter.proto)             | Suppose the API looks like this. The `google.api.http` lines map SayHello onto `POST /v1/greeter/hello`, and the server-streaming StreamHello onto `POST /v1/greeter/hello/stream` |
+| [`buf.yaml`](internal/examples/example1/buf.yaml) + [`buf.lock`](internal/examples/example1/buf.lock) | Which protos to read and which deps to fetch. The lock pins the exact googleapis commit                                                                                            |
+| [`buf.gen.ts.yaml`](internal/examples/example1/buf.gen.ts.yaml)                                       | Which plugin to run. `out: .` keeps the destination out of the template                                                                                                            |
+| [`Makefile`](internal/examples/example1/Makefile)                                                     | `install`, then `generate`, then `check`                                                                                                                                           |
+| [`web/src/rpc/`](internal/examples/example1/web/src/rpc)                                              | Where the client lands: inside the frontend, with no staging DIR between                                                                                                           |
+| [`golden.ts`](internal/examples/example1/golden.ts)                                                   | **The client you end up with**                                                                                                                                                     |
 
 Read `golden.ts` and the whole thing makes sense without running anything. `make generate` inside that DIR reproduces it, and `make check` diffs the two.
 
@@ -257,11 +269,3 @@ Welcome to contribute to this project via submitting merge requests and reportin
 **Have Fun Coding with this package!** 🎉🎉🎉
 
 <!-- TEMPLATE (EN) CLOSE: STANDARD PROJECT FOOTER -->
-
----
-
-<!-- TEMPLATE (EN) BEGIN: GITHUB STARS -->
-## GitHub Stars
-
-[![Stargazers](https://starchart.cc/yylego/kratos-ts-http.svg?variant=adaptive)](https://starchart.cc/yylego/kratos-ts-http)
-<!-- TEMPLATE (EN) CLOSE: GITHUB STARS -->

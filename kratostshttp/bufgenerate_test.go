@@ -25,5 +25,4 @@ func TestBuildBufArgs(t *testing.T) {
 func TestBuildBufArgsWithoutOutPath(t *testing.T) {
 	args := buildBufArgs("", []string{"--template", "buf.gen.ts.yaml"})
 	require.Equal(t, []string{"generate", "--template", "buf.gen.ts.yaml"}, args)
-	require.NotContains(t, args, "-o")
 }

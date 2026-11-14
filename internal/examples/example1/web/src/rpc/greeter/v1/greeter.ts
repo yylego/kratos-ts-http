@@ -141,5 +141,6 @@ export const SayHelloResp = new SayHelloResp$Type();
  * @generated ServiceType for protobuf service greeter.v1.Greeter
  */
 export const Greeter = new ServiceType("greeter.v1.Greeter", [
-    { name: "SayHello", options: { "google.api.http": { post: "/v1/greeter/hello", body: "*" } }, I: SayHelloParam, O: SayHelloResp }
+    { name: "SayHello", options: { "google.api.http": { post: "/v1/greeter/hello", body: "*" } }, I: SayHelloParam, O: SayHelloResp },
+    { name: "StreamHello", serverStreaming: true, options: { "google.api.http": { post: "/v1/greeter/hello/stream", body: "*" } }, I: SayHelloParam, O: SayHelloResp }
 ]);

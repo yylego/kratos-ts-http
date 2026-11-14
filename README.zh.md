@@ -1,10 +1,12 @@
 <!-- TEMPLATE (ZH) BEGIN: BADGES -->
+
 [![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/yylego/kratos-ts-http/release.yml?branch=main&label=BUILD)](https://github.com/yylego/kratos-ts-http/actions/workflows/release.yml?query=branch%3Amain)
 [![GoDoc](https://pkg.go.dev/badge/github.com/yylego/kratos-ts-http)](https://pkg.go.dev/github.com/yylego/kratos-ts-http)
 [![Coverage Status](https://img.shields.io/coveralls/github/yylego/kratos-ts-http/main.svg)](https://coveralls.io/github/yylego/kratos-ts-http?branch=main)
 [![Supported Go Versions](https://img.shields.io/badge/Go-1.25%2B-lightgrey.svg)](https://go.dev/)
 [![GitHub Release](https://img.shields.io/github/release/yylego/kratos-ts-http.svg)](https://github.com/yylego/kratos-ts-http/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/yylego/kratos-ts-http)](https://goreportcard.com/report/github.com/yylego/kratos-ts-http)
+
 <!-- TEMPLATE (ZH) CLOSE: BADGES -->
 
 # kratos-ts-http
@@ -38,12 +40,22 @@
 
 ## 两种用法
 
-| | 路线 | 入口 | 谁来驱动 buf |
-|---|---|---|---|
-| **①** | protoc 插件，一步到位 | `protoc-gen-kratos-ts-http` | 你的 Makefile / 命令行 |
-| **②** | 嵌进你自己的 Go 程序 | `kratostshttp.BufGenerate(...)` | 你自己的代码 |
+|       | 路线                  | 入口                            | 谁来驱动 buf           |
+| ----- | --------------------- | ------------------------------- | ---------------------- |
+| **①** | protoc 插件，一步到位 | `protoc-gen-kratos-ts-http`     | 你的 Makefile / 命令行 |
+| **②** | 嵌进你自己的 Go 程序  | `kratostshttp.BufGenerate(...)` | 你自己的代码           |
 
 两条都能到终点，按你的习惯挑一条。
+
+## 改写规则
+
+`*.client.ts` 里的每个方法按种类改写：
+
+| 种类                 | 生成的代码                                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 一元调用             | `executeGrpcToHttp(...)`，返回 `GrpcToHttpPromise<I, O>`                                                                              |
+| 服务端流式           | `executeGrpcToHttpStream(method, opt, input)`，返回 `GrpcToHttpStream<I, O>`，用 `for await` 逐条读                                   |
+| 客户端流式、双向流式 | 保持 gRPC 形态。Kratos 用 WebSocket 提供这两种，grpc-to-http 不涵盖，所以调用时由传输层给出清楚的提示，而不是发出一个错误的 HTTP 请求 |
 
 ## 安装
 
@@ -64,9 +76,7 @@ go install github.com/bufbuild/buf/cmd/buf@latest
 
 ## 用法一：protoc 插件
 
-要两份配置文件。示例里都有实物，下面不是伪代码：
-[`buf.yaml`](internal/examples/example1/buf.yaml) 和
-[`buf.gen.ts.yaml`](internal/examples/example1/buf.gen.ts.yaml)。
+要两份配置文件。示例里都有实物，下面不是伪代码：[`buf.yaml`](internal/examples/example1/buf.yaml) 和 [`buf.gen.ts.yaml`](internal/examples/example1/buf.gen.ts.yaml)。
 
 **`buf.yaml`** 说明 proto 在哪、要拉哪些依赖。Kratos v3 项目自带一份，所以你可能只需要补上 `deps` 那行：
 
@@ -75,10 +85,10 @@ version: v2
 modules:
   - path: api
 deps:
-  - buf.build/googleapis/googleapis   # google.api.http 就是从这儿来的
+  - buf.build/googleapis/googleapis # google.api.http 就是从这儿来的
 ```
 
-然后跑一次 `buf dep update`。它会生成 `buf.lock`，把 googleapis 的具体提交钉死 —— 这样产物才不会因为上游变动而漂。**漏了这步，生成会直接报 `imported file does not exist`。**
+然后跑一次 `buf dep update`。它会生成 `buf.lock`，把 googleapis 的具体提交钉住 —— 这样产物才不会因为上游变动而漂。**漏了这步，生成会直接报 `imported file does not exist`。**
 
 **`buf.gen.ts.yaml`** 指定用哪个插件、带哪些选项：
 
@@ -88,7 +98,7 @@ inputs:
   - directory: api
 plugins:
   - local: protoc-gen-kratos-ts-http
-    out: .   # 落点【不在这儿定】—— 由命令行的 -o 决定
+    out: . # 落点【不在这儿定】—— 由命令行的 -o 决定
     opt:
       - ts_nocheck
       - eslint_disable
@@ -110,12 +120,14 @@ kratos_ts_http:
 npm install @yylego/grpc-to-http
 ```
 
+服务端流式方法要用 `@yylego/grpc-to-http` 0.0.2 或更新的版本。Kratos 后端必须把 protojson 编解码器用作 `json` 编解码器，见[数据格式](https://github.com/yylego/grpc-to-http/blob/main/README.zh.md#数据格式)。
+
 **`opt` 各项说明：**
 
-| 配置项 | 作用 |
-| --- | --- |
-| `ts_nocheck` | 加上 `// @ts-nocheck`，生成的文件跳过类型检查 |
-| `eslint_disable` | 加上 `/* eslint-disable */`，让 lint 工具别管它们 |
+| 配置项             | 作用                                                           |
+| ------------------ | -------------------------------------------------------------- |
+| `ts_nocheck`       | 加上 `// @ts-nocheck`，生成的文件跳过类型检查                  |
+| `eslint_disable`   | 加上 `/* eslint-disable */`，让 lint 工具别管它们              |
 | `long_type_string` | 64 位整数映射成 `string` 而不是 `bigint`，这样过 JSON 不丢精度 |
 
 `--include-imports` 让 buf 把 import 进来的 google 标准类型也一并生成，这样客户端的 import 才能解析。google protos 由 buf 从 buf.build 拉取（在 `buf.yaml` 的 `deps` 里声明 `buf.build/googleapis/googleapis`），**不需要本地的 `third_party` proto 目录**。
@@ -153,14 +165,14 @@ err := kratostshttp.BufGenerate(
 
 [`internal/examples/example1`](internal/examples/example1) 把整条链摆在一个目录里，顺序就是问题冒出来的顺序：
 
-| 文件 | 它回答什么 |
-|---|---|
-| [`api/greeter/v1/greeter.proto`](internal/examples/example1/api/greeter/v1/greeter.proto) | 假设你的 API 长这样。那行 `google.api.http` 把 SayHello 映射到 `POST /v1/greeter/hello` |
-| [`buf.yaml`](internal/examples/example1/buf.yaml) + [`buf.lock`](internal/examples/example1/buf.lock) | proto 在哪、拉哪些依赖。lock 把 googleapis 的具体提交钉死 |
-| [`buf.gen.ts.yaml`](internal/examples/example1/buf.gen.ts.yaml) | 用哪个插件。`out: .` —— 落点不在这儿定 |
-| [`Makefile`](internal/examples/example1/Makefile) | 先 `install`，再 `generate`，然后 `check` |
-| [`web/src/rpc/`](internal/examples/example1/web/src/rpc) | 客户端落在这儿：就在前端里，中间没有中转目录 |
-| [`golden.ts`](internal/examples/example1/golden.ts) | **你最终会拿到的客户端** |
+| 文件                                                                                                  | 它回答什么                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`api/greeter/v1/greeter.proto`](internal/examples/example1/api/greeter/v1/greeter.proto)             | 假设你的 API 长这样。`google.api.http` 那几行把 SayHello 映射到 `POST /v1/greeter/hello`，把服务端流式的 StreamHello 映射到 `POST /v1/greeter/hello/stream` |
+| [`buf.yaml`](internal/examples/example1/buf.yaml) + [`buf.lock`](internal/examples/example1/buf.lock) | proto 在哪、拉哪些依赖。lock 把 googleapis 的具体提交钉住                                                                                                   |
+| [`buf.gen.ts.yaml`](internal/examples/example1/buf.gen.ts.yaml)                                       | 用哪个插件。`out: .` —— 落点不在这儿定                                                                                                                      |
+| [`Makefile`](internal/examples/example1/Makefile)                                                     | 先 `install`，再 `generate`，然后 `check`                                                                                                                   |
+| [`web/src/rpc/`](internal/examples/example1/web/src/rpc)                                              | 客户端落在这儿：就在前端里，中间没有中转目录                                                                                                                |
+| [`golden.ts`](internal/examples/example1/golden.ts)                                                   | **你最终会拿到的客户端**                                                                                                                                    |
 
 把 `golden.ts` 读一遍，不用跑任何东西就明白了。想自己跑，在那个目录里 `make generate` 就能复现，`make check` 拿两者对比。
 
@@ -257,11 +269,3 @@ MIT 许可证 - 详见 [LICENSE](LICENSE)。
 **祝你用这个包编程愉快！** 🎉🎉🎉
 
 <!-- TEMPLATE (ZH) CLOSE: STANDARD PROJECT FOOTER -->
-
----
-
-<!-- TEMPLATE (ZH) BEGIN: GITHUB STARS -->
-## GitHub 标星点赞
-
-[![Stargazers](https://starchart.cc/yylego/kratos-ts-http.svg?variant=adaptive)](https://starchart.cc/yylego/kratos-ts-http)
-<!-- TEMPLATE (ZH) CLOSE: GITHUB STARS -->

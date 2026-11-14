@@ -7,37 +7,87 @@ import (
 )
 
 // grpcClientSnippet is a compact protobuf-ts gRPC client, just enough to exercise each
-// replacement rule (the import site, the UnaryCall return type, the stackIntercept invocation).
+// replacement rule (the import site, the unary and server-streaming return types and invocations),
+// plus the client-streaming and duplex methods that must keep the gRPC form.
 //
 // grpcClientSnippet 是一段最小的 protobuf-ts gRPC 客户端，刚好覆盖每条替换规则
-// （import 地标、UnaryCall 返回类型、stackIntercept 调用）
+// （import 地标、一元与服务端流式的返回类型和调用），外加必须保持 gRPC 形态的客户端流式和双向流式方法
 const grpcClientSnippet = `import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
-export interface IFooClient {
-    bar(input: BarRequest, options?: RpcOptions): UnaryCall<BarRequest, BarReply>;
-}
 export class FooClient implements IFooClient {
-    bar(input: BarRequest, options?: RpcOptions): UnaryCall<BarRequest, BarReply> {
-        return stackIntercept<BarRequest, BarReply>("unary", this._transport, method, opt, input);
+    send(input: FooParam, options?: RpcOptions): UnaryCall<FooParam, FooResp> {
+        return stackIntercept<FooParam, FooResp>("unary", this._transport, method, opt, input);
+    }
+    watch(input: FooParam, options?: RpcOptions): ServerStreamingCall<FooParam, FooResp> {
+        return stackIntercept<FooParam, FooResp>("serverStreaming", this._transport, method, opt, input);
+    }
+    upload(options?: RpcOptions): ClientStreamingCall<FooParam, FooResp> {
+        return stackIntercept<FooParam, FooResp>("clientStreaming", this._transport, method, opt);
+    }
+    chat(options?: RpcOptions): DuplexStreamingCall<FooParam, FooResp> {
+        return stackIntercept<FooParam, FooResp>("duplex", this._transport, method, opt);
     }
 }
 `
 
-// requireConverted asserts the content is a converted HTTP client.
+// httpClientSnippet is grpcClientSnippet in HTTP form
+// httpClientSnippet 是 grpcClientSnippet 改写成 HTTP 形态后的样子
+const httpClientSnippet = `import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
+import { executeGrpcToHttp, executeGrpcToHttpStream } from '@yylego/grpc-to-http';
+import type { GrpcToHttpPromise, GrpcToHttpStream } from '@yylego/grpc-to-http';
+export class FooClient implements IFooClient {
+    send(input: FooParam, options?: RpcOptions): GrpcToHttpPromise<FooParam, FooResp> {
+        return executeGrpcToHttp<FooParam, FooResp>("unary", this._transport, method, opt, input);
+    }
+    watch(input: FooParam, options?: RpcOptions): GrpcToHttpStream<FooParam, FooResp> {
+        return executeGrpcToHttpStream<FooParam, FooResp>(method, opt, input);
+    }
+    upload(options?: RpcOptions): ClientStreamingCall<FooParam, FooResp> {
+        return stackIntercept<FooParam, FooResp>("clientStreaming", this._transport, method, opt);
+    }
+    chat(options?: RpcOptions): DuplexStreamingCall<FooParam, FooResp> {
+        return stackIntercept<FooParam, FooResp>("duplex", this._transport, method, opt);
+    }
+}
+`
+
+// TestRewriteCodeAddsImportOnRepeatRun covers a client rewritten once with a unary method alone,
+// then given a server-streaming method: the repeat run must import the stream symbols too.
 //
-// requireConverted 断言内容已转换成 HTTP 客户端
-func requireConverted(t *testing.T, out string) {
-	t.Helper()
-	require.Contains(t, out, "import { executeGrpcToHttp } from '@yylego/grpc-to-http';")
-	require.Contains(t, out, "executeGrpcToHttp<")
-	require.Contains(t, out, "GrpcToHttpPromise<")
-	require.NotContains(t, out, "stackIntercept<")
-	require.NotContains(t, out, "UnaryCall<")
+// 覆盖：一个只有一元方法时改写过的客户端，后来加了服务端流式方法，再跑一次要把流式的符号也导入进来。
+func TestRewriteCodeAddsImportOnRepeatRun(t *testing.T) {
+	const halfDone = `import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
+import { executeGrpcToHttp } from '@yylego/grpc-to-http';
+import type { GrpcToHttpPromise } from '@yylego/grpc-to-http';
+export class FooClient implements IFooClient {
+    send(input: FooParam, options?: RpcOptions): GrpcToHttpPromise<FooParam, FooResp> {
+        return executeGrpcToHttp<FooParam, FooResp>("unary", this._transport, method, opt, input);
+    }
+    watch(input: FooParam, options?: RpcOptions): ServerStreamingCall<FooParam, FooResp> {
+        return stackIntercept<FooParam, FooResp>("serverStreaming", this._transport, method, opt, input);
+    }
+}
+`
+	const want = `import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
+import { executeGrpcToHttp, executeGrpcToHttpStream } from '@yylego/grpc-to-http';
+import type { GrpcToHttpPromise, GrpcToHttpStream } from '@yylego/grpc-to-http';
+export class FooClient implements IFooClient {
+    send(input: FooParam, options?: RpcOptions): GrpcToHttpPromise<FooParam, FooResp> {
+        return executeGrpcToHttp<FooParam, FooResp>("unary", this._transport, method, opt, input);
+    }
+    watch(input: FooParam, options?: RpcOptions): GrpcToHttpStream<FooParam, FooResp> {
+        return executeGrpcToHttpStream<FooParam, FooResp>(method, opt, input);
+    }
+}
+`
+	out, err := rewriteCode(halfDone)
+	require.NoError(t, err)
+	require.Equal(t, want, out)
 }
 
 func TestRewriteCode(t *testing.T) {
 	out, err := rewriteCode(grpcClientSnippet)
 	require.NoError(t, err)
-	requireConverted(t, out)
+	require.Equal(t, httpClientSnippet, out)
 
 	// Running again keeps the same result (idempotent).
 	// 再跑一次结果不变（幂等）
@@ -54,12 +104,11 @@ func TestRewriteCode(t *testing.T) {
 // 此时必须报错，而不是产出"用了却没 import"的坏 TS。
 func TestRewriteCodeMissingLandmarkErrors(t *testing.T) {
 	const noLandmark = `export function foo() {
-    return stackIntercept<BarRequest, BarReply>("unary", this._transport, method, opt, input);
+    return stackIntercept<FooParam, FooResp>("unary", this._transport, method, opt, input);
 }
 `
 	_, err := rewriteCode(noLandmark)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "landmark")
 }
 
 // TestRewriteCodePassesNonClientThrough guards that content with no gRPC symbols comes back

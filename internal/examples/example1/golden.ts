@@ -6,13 +6,14 @@
 import type { RpcTransport } from "@protobuf-ts/runtime-rpc";
 import type { ServiceInfo } from "@protobuf-ts/runtime-rpc";
 import { Greeter } from "./greeter";
+import type { ServerStreamingCall } from "@protobuf-ts/runtime-rpc";
 import { stackIntercept } from "@protobuf-ts/runtime-rpc";
 import type { SayHelloResp } from "./greeter";
 import type { SayHelloParam } from "./greeter";
 import type { UnaryCall } from "@protobuf-ts/runtime-rpc";
 import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
-import { executeGrpcToHttp } from '@yylego/grpc-to-http';
-import type { GrpcToHttpPromise } from '@yylego/grpc-to-http';
+import { executeGrpcToHttp, executeGrpcToHttpStream } from '@yylego/grpc-to-http';
+import type { GrpcToHttpPromise, GrpcToHttpStream } from '@yylego/grpc-to-http';
 /**
  * Greeter says hello.
  * Greeter 提供问候服务。
@@ -32,6 +33,17 @@ export interface IGreeterClient {
      * @generated from protobuf rpc: SayHello
      */
     sayHello(input: SayHelloParam, options?: RpcOptions): GrpcToHttpPromise<SayHelloParam, SayHelloResp>;
+    /**
+     * StreamHello sends the greeting in pieces, one message each time.
+     * StreamHello 把问候语分成几段，一段一段推送。
+     *
+     * Kratos v3 serves a server-streaming RPC through HTTP as Server-Sent Events, and the generated
+     * TypeScript client reads them with for await.
+     * Kratos v3 通过 HTTP 以 SSE 推送服务端流式 RPC，生成的 TypeScript 客户端用 for await 逐条读取。
+     *
+     * @generated from protobuf rpc: StreamHello
+     */
+    streamHello(input: SayHelloParam, options?: RpcOptions): GrpcToHttpStream<SayHelloParam, SayHelloResp>;
 }
 /**
  * Greeter says hello.
@@ -59,5 +71,19 @@ export class GreeterClient implements IGreeterClient, ServiceInfo {
     sayHello(input: SayHelloParam, options?: RpcOptions): GrpcToHttpPromise<SayHelloParam, SayHelloResp> {
         const method = this.methods[0], opt = this._transport.mergeOptions(options);
         return executeGrpcToHttp<SayHelloParam, SayHelloResp>("unary", this._transport, method, opt, input);
+    }
+    /**
+     * StreamHello sends the greeting in pieces, one message each time.
+     * StreamHello 把问候语分成几段，一段一段推送。
+     *
+     * Kratos v3 serves a server-streaming RPC through HTTP as Server-Sent Events, and the generated
+     * TypeScript client reads them with for await.
+     * Kratos v3 通过 HTTP 以 SSE 推送服务端流式 RPC，生成的 TypeScript 客户端用 for await 逐条读取。
+     *
+     * @generated from protobuf rpc: StreamHello
+     */
+    streamHello(input: SayHelloParam, options?: RpcOptions): GrpcToHttpStream<SayHelloParam, SayHelloResp> {
+        const method = this.methods[1], opt = this._transport.mergeOptions(options);
+        return executeGrpcToHttpStream<SayHelloParam, SayHelloResp>(method, opt, input);
     }
 }
