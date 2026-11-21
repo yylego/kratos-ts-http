@@ -27,6 +27,11 @@ var unaryInvoke = regexp.MustCompile(`stackIntercept<([^>]*)>\("unary", `)
 // serverStreamingInvoke 匹配 protobuf-ts 服务端流式调用开头到 method 参数之前的部分，捕获类型参数
 var serverStreamingInvoke = regexp.MustCompile(`stackIntercept<([^>]*)>\("serverStreaming", this\._transport, `)
 
+// webSocketInvoke matches the protobuf-ts client-streaming and duplex invocations up to the method argument,
+// capturing the type arguments
+// webSocketInvoke 匹配 protobuf-ts 客户端流式和双向流式调用开头到 method 参数之前的部分，捕获类型参数
+var webSocketInvoke = regexp.MustCompile(`stackIntercept<([^>]*)>\("(?:clientStreaming|duplex)", this\._transport, `)
+
 // rewriteCode converts gRPC TS client code to HTTP client code, idempotent across repeat runs
 // rewriteCode 把 gRPC 形态的 TS 客户端代码改写为 HTTP 形态，重复运行保持幂等
 //
@@ -36,28 +41,29 @@ var serverStreamingInvoke = regexp.MustCompile(`stackIntercept<([^>]*)>\("server
 func rewriteCode(srcContent string) (string, error) {
 	newContent := srcContent
 
-	// Replace the unary and server-streaming invocations with HTTP equivalents; the stream function
-	// takes no callType and no transport. Client-streaming and duplex methods keep the gRPC form:
-	// Kratos serves them through WebSocket, which grpc-to-http does not handle, so a request gets the
-	// transport's own message instead of going out as a wrong HTTP request.
-	// 把一元调用和服务端流式调用改成 http 形态；流式函数不带 callType 和 transport。客户端流式和
-	// 双向流式保持 gRPC 形态：Kratos 用 WebSocket 提供它们，grpc-to-http 不涵盖，保持原样时调用会
-	// 由传输层给出清楚的提示，而不是发出一个错误的 HTTP 请求。
+	// Replace each invocation with its grpc-to-http equivalent, as Kratos v3 serves each kind through HTTP:
+	// unary as a plain request, server-streaming as SSE, client-streaming and duplex as WebSocket.
+	// The stream functions take no callType and no transport.
+	// 把每种调用换成 grpc-to-http 里对应的函数，跟 Kratos v3 用 HTTP 提供它们的方式一一对应：
+	// 一元是普通请求，服务端流式是 SSE，客户端流式和双向流式是 WebSocket。流式函数不带 callType 和 transport。
 	newContent = unaryInvoke.ReplaceAllString(newContent, `executeGrpcToHttp<$1>("unary", `)
 	newContent = strings.ReplaceAll(newContent, "UnaryCall<", "GrpcToHttpPromise<")
 	newContent = serverStreamingInvoke.ReplaceAllString(newContent, "executeGrpcToHttpStream<$1>(")
 	newContent = strings.ReplaceAll(newContent, "ServerStreamingCall<", "GrpcToHttpStream<")
+	newContent = webSocketInvoke.ReplaceAllString(newContent, "executeGrpcToHttpWebSocket<$1>(")
+	newContent = strings.ReplaceAll(newContent, "ClientStreamingCall<", "GrpcToHttpWebSocket<")
+	newContent = strings.ReplaceAll(newContent, "DuplexStreamingCall<", "GrpcToHttpWebSocket<")
 
 	// Import just the http symbols the code uses. A file with none of them (a non-client file,
 	// and likewise one with no gRPC calls) passes through untouched.
 	// 只导入代码用到的 http 符号；一个都不含的文件（非 client 文件、或本就没 gRPC 调用）原样透传。
 	var valueNames, typeNames []string
-	for _, name := range []string{"executeGrpcToHttp", "executeGrpcToHttpStream"} {
+	for _, name := range []string{"executeGrpcToHttp", "executeGrpcToHttpStream", "executeGrpcToHttpWebSocket"} {
 		if strings.Contains(newContent, name+"<") {
 			valueNames = append(valueNames, name)
 		}
 	}
-	for _, name := range []string{"GrpcToHttpPromise", "GrpcToHttpStream"} {
+	for _, name := range []string{"GrpcToHttpPromise", "GrpcToHttpStream", "GrpcToHttpWebSocket"} {
 		if strings.Contains(newContent, name+"<") {
 			typeNames = append(typeNames, name)
 		}

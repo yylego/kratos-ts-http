@@ -64,7 +64,7 @@ func BufGenerate(workRoot string, outPath string, bufArgs []string) error {
 	}
 
 	// Check before exec, so the error can name what is missing
-	// 执行前先检查，好让错误信息指出缺少什么
+	// 执行前先检查，好让错误信息指出缺少的东西
 	if _, err := exec.LookPath(bufCommandName); err != nil {
 		return erero.Errorf("command %s not found, Kratos v3 projects ship it, please install: go install github.com/bufbuild/buf/cmd/buf@latest", bufCommandName)
 	}

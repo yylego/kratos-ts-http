@@ -6,14 +6,15 @@
 import type { RpcTransport } from "@protobuf-ts/runtime-rpc";
 import type { ServiceInfo } from "@protobuf-ts/runtime-rpc";
 import { Greeter } from "./greeter";
+import type { DuplexStreamingCall } from "@protobuf-ts/runtime-rpc";
 import type { ServerStreamingCall } from "@protobuf-ts/runtime-rpc";
 import { stackIntercept } from "@protobuf-ts/runtime-rpc";
 import type { SayHelloResp } from "./greeter";
 import type { SayHelloParam } from "./greeter";
 import type { UnaryCall } from "@protobuf-ts/runtime-rpc";
 import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
-import { executeGrpcToHttp, executeGrpcToHttpStream } from '@yylego/grpc-to-http';
-import type { GrpcToHttpPromise, GrpcToHttpStream } from '@yylego/grpc-to-http';
+import { executeGrpcToHttp, executeGrpcToHttpStream, executeGrpcToHttpWebSocket } from '@yylego/grpc-to-http';
+import type { GrpcToHttpPromise, GrpcToHttpStream, GrpcToHttpWebSocket } from '@yylego/grpc-to-http';
 /**
  * Greeter says hello.
  * Greeter 提供问候服务。
@@ -44,6 +45,17 @@ export interface IGreeterClient {
      * @generated from protobuf rpc: StreamHello
      */
     streamHello(input: SayHelloParam, options?: RpcOptions): GrpcToHttpStream<SayHelloParam, SayHelloResp>;
+    /**
+     * ChatHello greets each name as it comes in, while the connection stays open.
+     * ChatHello 在连接保持期间，每收到一个名字就回一句问候。
+     *
+     * Kratos v3 serves a duplex RPC through HTTP as a WebSocket on a GET route, and the generated
+     * TypeScript client writes with send and reads with for await.
+     * Kratos v3 通过 HTTP 以 WebSocket 提供双向流式 RPC（走 GET 路由），生成的 TypeScript 客户端用 send 发、用 for await 读。
+     *
+     * @generated from protobuf rpc: ChatHello
+     */
+    chatHello(options?: RpcOptions): GrpcToHttpWebSocket<SayHelloParam, SayHelloResp>;
 }
 /**
  * Greeter says hello.
@@ -85,5 +97,19 @@ export class GreeterClient implements IGreeterClient, ServiceInfo {
     streamHello(input: SayHelloParam, options?: RpcOptions): GrpcToHttpStream<SayHelloParam, SayHelloResp> {
         const method = this.methods[1], opt = this._transport.mergeOptions(options);
         return executeGrpcToHttpStream<SayHelloParam, SayHelloResp>(method, opt, input);
+    }
+    /**
+     * ChatHello greets each name as it comes in, while the connection stays open.
+     * ChatHello 在连接保持期间，每收到一个名字就回一句问候。
+     *
+     * Kratos v3 serves a duplex RPC through HTTP as a WebSocket on a GET route, and the generated
+     * TypeScript client writes with send and reads with for await.
+     * Kratos v3 通过 HTTP 以 WebSocket 提供双向流式 RPC（走 GET 路由），生成的 TypeScript 客户端用 send 发、用 for await 读。
+     *
+     * @generated from protobuf rpc: ChatHello
+     */
+    chatHello(options?: RpcOptions): GrpcToHttpWebSocket<SayHelloParam, SayHelloResp> {
+        const method = this.methods[2], opt = this._transport.mergeOptions(options);
+        return executeGrpcToHttpWebSocket<SayHelloParam, SayHelloResp>(method, opt);
     }
 }

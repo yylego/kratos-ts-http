@@ -142,7 +142,7 @@ func TestRewriteResponseIsIdempotent(t *testing.T) {
 // own error is surfaced instead of being swallowed.
 //
 // 底层插件自己报错时必须原样带出来 —— 吞掉的话，用户只看到我们这层的报错，
-// 而真正的原因（比如 proto 写错了）被掩盖，排查方向随之偏离。
+// 而真正的原因（比如 proto 写错）被掩盖，排查方向随之偏离。
 func TestRewriteResponsePropagatesPluginError(t *testing.T) {
 	var response pluginpb.CodeGeneratorResponse
 	response.Error = proto.String("missing semicolon at line 3")

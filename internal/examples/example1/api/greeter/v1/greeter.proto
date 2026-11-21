@@ -35,6 +35,16 @@ service Greeter {
       body: "*"
     };
   }
+
+  // ChatHello greets each name as it comes in, while the connection stays open.
+  // ChatHello 在连接保持期间，每收到一个名字就回一句问候。
+  //
+  // Kratos v3 serves a duplex RPC through HTTP as a WebSocket on a GET route, and the generated
+  // TypeScript client writes with send and reads with for await.
+  // Kratos v3 通过 HTTP 以 WebSocket 提供双向流式 RPC（走 GET 路由），生成的 TypeScript 客户端用 send 发、用 for await 读。
+  rpc ChatHello(stream SayHelloParam) returns (stream SayHelloResp) {
+    option (google.api.http) = {get: "/v1/greeter/hello/chat"};
+  }
 }
 
 // SayHelloParam carries the name to greet.

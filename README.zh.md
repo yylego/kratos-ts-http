@@ -51,11 +51,11 @@
 
 `*.client.ts` 里的每个方法按种类改写：
 
-| 种类                 | 生成的代码                                                                                                                            |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 一元调用             | `executeGrpcToHttp(...)`，返回 `GrpcToHttpPromise<I, O>`                                                                              |
-| 服务端流式           | `executeGrpcToHttpStream(method, opt, input)`，返回 `GrpcToHttpStream<I, O>`，用 `for await` 逐条读                                   |
-| 客户端流式、双向流式 | 保持 gRPC 形态。Kratos 用 WebSocket 提供这两种，grpc-to-http 不涵盖，所以调用时由传输层给出清楚的提示，而不是发出一个错误的 HTTP 请求 |
+| 种类                 | 生成的代码                                                                                                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 一元调用             | `executeGrpcToHttp(...)`，返回 `GrpcToHttpPromise<I, O>`                                                                                                        |
+| 服务端流式           | `executeGrpcToHttpStream(method, opt, input)`，返回 `GrpcToHttpStream<I, O>`，用 `for await` 逐条读                                                             |
+| 客户端流式、双向流式 | `executeGrpcToHttpWebSocket(method, opt)`，返回 `GrpcToHttpWebSocket<I, O>`：用 `send`、`closeSend` 发，用 `for await` 读，走 Kratos 提供这两种调用的 WebSocket |
 
 ## 安装
 
@@ -72,7 +72,7 @@ go install github.com/yylego/kratos-ts-http/cmd/protoc-gen-kratos-ts-http@latest
 go install github.com/bufbuild/buf/cmd/buf@latest
 ```
 
-`@protobuf-ts/plugin` **不是可选的**。本项目自己不翻译 proto，它把这一步转交给上游 —— [缘由](#设计说明)见下文。插件启动时会先检查，缺了就直接告诉你该装什么，而不是抛一句没给出路的 `executable file not found`。
+`@protobuf-ts/plugin` **不是可选的**。本项目自己不翻译 proto，它把这一步转交给上游 —— [缘由](#设计说明)见下文。插件启动时会先检查，缺了就直接告诉你该装哪个插件，而不是抛一句没给出路的 `executable file not found`。
 
 ## 用法一：protoc 插件
 
@@ -120,7 +120,7 @@ kratos_ts_http:
 npm install @yylego/grpc-to-http
 ```
 
-服务端流式方法要用 `@yylego/grpc-to-http` 0.0.2 或更新的版本。Kratos 后端必须把 protojson 编解码器用作 `json` 编解码器，见[数据格式](https://github.com/yylego/grpc-to-http/blob/main/README.zh.md#数据格式)。
+服务端流式方法要用 `@yylego/grpc-to-http` 0.0.2 或更新的版本，客户端流式和双向流式方法要用 0.0.5 或更新的版本。Kratos 后端必须把 protojson 编解码器用作 `json` 编解码器，见[数据格式](https://github.com/yylego/grpc-to-http/blob/main/README.zh.md#数据格式)。
 
 **`opt` 各项说明：**
 
@@ -157,7 +157,7 @@ err := kratostshttp.BufGenerate(
 
 ⚠️ **注意 `-o` 与模板里 `out:` 的关系** —— `out:` 是**相对 `-o`** 的，两者会拼起来。想让产物正好落在 `outPath`，把模板里的 `out:` 写成 `.`。
 
-⚠️ **`BufGenerate` 自己不做任何替换。** 它只负责跑 buf；替换之所以发生，是因为**模板里写的是** `protoc-gen-kratos-ts-http`。要是模板里配成 `protoc-gen-ts`，这次调用照样成功、照样返回 `nil`，产物却停在 gRPC 形态。这里的"成功"只意味着"buf 跑完了"，从来不意味着"目标达成了"。这是**刻意的分工** —— 模板你本来就得写，插件的选择早有天然归宿。
+⚠️ **`BufGenerate` 自己不做任何替换。** 它只负责跑 buf；替换之所以发生，是因为**模板里写的是** `protoc-gen-kratos-ts-http`。要是模板里配成 `protoc-gen-ts`，这次调用照样成功、照样返回 `nil`，产物却停在 gRPC 形态。这里的"成功"只意味着"buf 运行结束"，从来不意味着"目标已经达成"。这是**刻意的分工** —— 模板你本来就得写，插件的选择早有天然归宿。
 
 💡 `--config` / `--template` **既收文件路径，也直接收配置【内容】本身**，所以动态拼的配置可以直接塞进 `bufArgs`、不必落临时文件。⛔ 但 buf 区分二者，看的是【这串字符结尾像不像 `.yaml` / `.yml` / `.json`】，**跟文件存不存在无关** —— 所以内容末尾恰好以 `.yaml` 结尾（哪怕只是行尾注释提到某个文件名），整段就会被当文件名去 open，报出 `open version: v2` 这种完全指不到病因的错。传内容时留意最后一行。
 
@@ -174,7 +174,7 @@ err := kratostshttp.BufGenerate(
 | [`web/src/rpc/`](internal/examples/example1/web/src/rpc)                                              | 客户端落在这儿：就在前端里，中间没有中转目录                                                                                                                |
 | [`golden.ts`](internal/examples/example1/golden.ts)                                                   | **你最终会拿到的客户端**                                                                                                                                    |
 
-把 `golden.ts` 读一遍，不用跑任何东西就明白了。想自己跑，在那个目录里 `make generate` 就能复现，`make check` 拿两者对比。
+把 `golden.ts` 读一遍，不用运行任何东西就能看懂。想自己跑，在那个目录里 `make generate` 就能复现，`make check` 拿两者对比。
 
 ## 设计说明
 

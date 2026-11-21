@@ -51,11 +51,11 @@ Both end at the same place, so take the one that suits the workflow.
 
 Each method in a `*.client.ts` file is rewritten according to its kind:
 
-| Kind                     | Generated code                                                                                                                                                                           |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unary                    | `executeGrpcToHttp(...)`, returning `GrpcToHttpPromise<I, O>`                                                                                                                            |
-| Server streaming         | `executeGrpcToHttpStream(method, opt, input)`, returning `GrpcToHttpStream<I, O>`, read with `for await`                                                                                 |
-| Client streaming, duplex | Kept in gRPC form. Kratos serves these through WebSocket, which grpc-to-http does not handle, so a request gets the transport's own message instead of going out as a wrong HTTP request |
+| Kind                     | Generated code                                                                                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unary                    | `executeGrpcToHttp(...)`, returning `GrpcToHttpPromise<I, O>`                                                                                                                             |
+| Server streaming         | `executeGrpcToHttpStream(method, opt, input)`, returning `GrpcToHttpStream<I, O>`, read with `for await`                                                                                  |
+| Client streaming, duplex | `executeGrpcToHttpWebSocket(method, opt)`, returning `GrpcToHttpWebSocket<I, O>`: `send` and `closeSend` to write, `for await` to read, through the WebSocket that Kratos serves these on |
 
 ## Installation
 
@@ -120,7 +120,7 @@ Then add the runtime to the frontend:
 npm install @yylego/grpc-to-http
 ```
 
-Server-streaming methods need `@yylego/grpc-to-http` 0.0.2 and up. The Kratos backend must use the protojson codec as its `json` codec, see [Data Format](https://github.com/yylego/grpc-to-http#data-format).
+Server-streaming methods need `@yylego/grpc-to-http` 0.0.2 and up, client-streaming and duplex methods 0.0.5 and up. The Kratos backend must use the protojson codec as its `json` codec, see [Data Format](https://github.com/yylego/grpc-to-http#data-format).
 
 **`opt` options:**
 

@@ -7,11 +7,10 @@ import (
 )
 
 // grpcClientSnippet is a compact protobuf-ts gRPC client, just enough to exercise each
-// replacement rule (the import site, the unary and server-streaming return types and invocations),
-// plus the client-streaming and duplex methods that must keep the gRPC form.
+// replacement rule (the import site, and the return type and invocation of each kind of method).
 //
 // grpcClientSnippet 是一段最小的 protobuf-ts gRPC 客户端，刚好覆盖每条替换规则
-// （import 地标、一元与服务端流式的返回类型和调用），外加必须保持 gRPC 形态的客户端流式和双向流式方法
+// （import 地标，以及四种调用各自的返回类型和调用写法）
 const grpcClientSnippet = `import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
 export class FooClient implements IFooClient {
     send(input: FooParam, options?: RpcOptions): UnaryCall<FooParam, FooResp> {
@@ -32,8 +31,8 @@ export class FooClient implements IFooClient {
 // httpClientSnippet is grpcClientSnippet in HTTP form
 // httpClientSnippet 是 grpcClientSnippet 改写成 HTTP 形态后的样子
 const httpClientSnippet = `import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
-import { executeGrpcToHttp, executeGrpcToHttpStream } from '@yylego/grpc-to-http';
-import type { GrpcToHttpPromise, GrpcToHttpStream } from '@yylego/grpc-to-http';
+import { executeGrpcToHttp, executeGrpcToHttpStream, executeGrpcToHttpWebSocket } from '@yylego/grpc-to-http';
+import type { GrpcToHttpPromise, GrpcToHttpStream, GrpcToHttpWebSocket } from '@yylego/grpc-to-http';
 export class FooClient implements IFooClient {
     send(input: FooParam, options?: RpcOptions): GrpcToHttpPromise<FooParam, FooResp> {
         return executeGrpcToHttp<FooParam, FooResp>("unary", this._transport, method, opt, input);
@@ -41,11 +40,11 @@ export class FooClient implements IFooClient {
     watch(input: FooParam, options?: RpcOptions): GrpcToHttpStream<FooParam, FooResp> {
         return executeGrpcToHttpStream<FooParam, FooResp>(method, opt, input);
     }
-    upload(options?: RpcOptions): ClientStreamingCall<FooParam, FooResp> {
-        return stackIntercept<FooParam, FooResp>("clientStreaming", this._transport, method, opt);
+    upload(options?: RpcOptions): GrpcToHttpWebSocket<FooParam, FooResp> {
+        return executeGrpcToHttpWebSocket<FooParam, FooResp>(method, opt);
     }
-    chat(options?: RpcOptions): DuplexStreamingCall<FooParam, FooResp> {
-        return stackIntercept<FooParam, FooResp>("duplex", this._transport, method, opt);
+    chat(options?: RpcOptions): GrpcToHttpWebSocket<FooParam, FooResp> {
+        return executeGrpcToHttpWebSocket<FooParam, FooResp>(method, opt);
     }
 }
 `
@@ -100,7 +99,7 @@ func TestRewriteCode(t *testing.T) {
 // but no RpcOptions landmark gets its invocations rewritten yet cannot receive the import, so
 // the function must error instead of emitting TS that uses symbols it does not import.
 //
-// 守护防御逻辑：有 gRPC 调用、却没有 RpcOptions 地标导入的代码，调用被替换了、导入却插不进去，
+// 守护防御逻辑：有 gRPC 调用、却没有 RpcOptions 地标导入的代码，调用会被替换、导入却插不进去，
 // 此时必须报错，而不是产出"用了却没 import"的坏 TS。
 func TestRewriteCodeMissingLandmarkErrors(t *testing.T) {
 	const noLandmark = `export function foo() {

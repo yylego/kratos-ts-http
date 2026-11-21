@@ -89,7 +89,7 @@ func RunTsPlugin(stdin io.Reader, stdout io.Writer) (GenStats, error) {
 // 逐字节跟随它的每次发布，一旦不一致，前端运行时便会出错。
 func delegateToTsPlugin(srcRequest []byte) ([]byte, error) {
 	// Check before exec, so the error can name what is missing
-	// 执行前先检查，好让错误信息指出缺少什么
+	// 执行前先检查，好让错误信息指出缺少的东西
 	if _, err := exec.LookPath(tsPluginName); err != nil {
 		return nil, erero.Errorf("plugin %s not found, please install it: npm install -g @protobuf-ts/plugin", tsPluginName)
 	}
@@ -117,7 +117,7 @@ func rewriteResponse(srcResponse []byte) ([]byte, GenStats, error) {
 	}
 	// Pass the plugin's own error through: swallowing it would hide the true cause, such as a
 	// mistake in the proto, and send the investigation in the wrong direction
-	// 原样传出底层插件的报错：吞掉会掩盖真正的原因（比如 proto 写错了），把排查引向错误的方向
+	// 原样传出底层插件的报错：吞掉会掩盖真正的原因（比如 proto 写错），把排查引向错误的方向
 	if response.Error != nil && *response.Error != "" {
 		return nil, GenStats{}, erero.Errorf("%s reported an error: %s", tsPluginName, *response.Error)
 	}
